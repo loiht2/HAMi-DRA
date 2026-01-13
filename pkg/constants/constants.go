@@ -24,4 +24,11 @@ const (
 	NvidiaDeviceType = "hami-gpu"
 
 	DraLabel = "hami.io/dra"
+
+	DeviceAttributeUUID         = "uuid"
+	DeviceAttributeArchitecture = "architecture"
+	DeviceAttributeBrand        = "brand"
+	DeviceAttributeProductName  = "productName"
+	DeviceCapacityCores         = "cores"
+	DeviceCapacityMemory        = "memory"
 )
