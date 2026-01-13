@@ -116,6 +116,15 @@ monitor:
   kubeAPIQPS: 40.0
   kubeAPIBurst: 60
   collectInterval: "30s"
+  ## Monitor service configuration
+  service:
+    ## Service type: ClusterIP, NodePort, or LoadBalancer
+    ## Defaults to ClusterIP
+    type: ClusterIP
+    ## NodePort configuration (only used when type is NodePort)
+    nodePort:
+      ## Metrics port (NodePort). If not specified, Kubernetes will assign a random port
+      metrics: ""
 
 # Certificate configuration
 certs:
