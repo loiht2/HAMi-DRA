@@ -17,8 +17,10 @@ limitations under the License.
 package constants
 
 const (
-	UseUUIDAnnotation = "nvidia.com/use-gpuuuid"
-	UseTypeAnnotation = "nvidia.com/use-gputype"
+	UseUUIDAnnotation   = "nvidia.com/use-gpuuuid"
+	NoUseUUIDAnnotation = "nvidia.com/nouse-gpuuuid"
+	UseTypeAnnotation   = "nvidia.com/use-gputype"
+	NoUseTypeAnnotation = "nvidia.com/nouse-gputype"
 
 	NvidiaDraDriver  = "hami-core-gpu.project-hami.io"
 	NvidiaDeviceType = "hami-gpu"
