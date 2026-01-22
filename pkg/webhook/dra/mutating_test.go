@@ -29,16 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func mockPod(annotations map[string]string) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-pod",
-			Namespace:   "default",
-			Annotations: annotations,
-		},
-	}
-}
-
 func TestAddAnnotationSelectors(t *testing.T) {
 	tests := []struct {
 		name           string
