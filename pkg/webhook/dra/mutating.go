@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
@@ -186,18 +187,37 @@ func (a *MutatingAdmission) removeResource(container *corev1.Container, resource
 func (a *MutatingAdmission) addAnnotationSelectors(resourceclaim *resourceapi.ResourceClaim, pod *corev1.Pod) {
 	exactly := resourceclaim.Spec.Devices.Requests[0].Exactly
 
-	if uuid, ok := pod.Annotations[constants.UseUUIDAnnotation]; ok {
+	if UUIDStr, ok := pod.Annotations[constants.UseUUIDAnnotation]; ok {
+		UUIDs := strings.Split(UUIDStr, ",")
 		exactly.Selectors = append(exactly.Selectors, resourceapi.DeviceSelector{
 			CEL: &resourceapi.CELDeviceSelector{
-				Expression: fmt.Sprintf(`device.attributes["%s"].uuid == "%s"`, constants.NvidiaDraDriver, uuid),
+				Expression: fmt.Sprintf(`device.attributes["%s"].uuid in ["%s"]`, constants.NvidiaDraDriver, strings.Join(UUIDs, `","`)),
+			},
+		})
+	}
+	if noUUIDStr, ok := pod.Annotations[constants.NoUseUUIDAnnotation]; ok {
+		noUUIDs := strings.Split(noUUIDStr, ",")
+		exactly.Selectors = append(exactly.Selectors, resourceapi.DeviceSelector{
+			CEL: &resourceapi.CELDeviceSelector{
+				Expression: fmt.Sprintf(`device.attributes["%s"].uuid not in ["%s"]`, constants.NvidiaDraDriver, strings.Join(noUUIDs, `","`)),
 			},
 		})
 	}
 
-	if deviceType, ok := pod.Annotations[constants.UseTypeAnnotation]; ok {
+	if useTypeStr, ok := pod.Annotations[constants.UseTypeAnnotation]; ok {
+		useTypes := strings.Split(useTypeStr, ",")
 		exactly.Selectors = append(exactly.Selectors, resourceapi.DeviceSelector{
 			CEL: &resourceapi.CELDeviceSelector{
-				Expression: fmt.Sprintf(`device.attributes["%s"].productName == "%s"`, constants.NvidiaDraDriver, deviceType),
+				Expression: fmt.Sprintf(`device.attributes["%s"].productName in ["%s"]`, constants.NvidiaDraDriver, strings.Join(useTypes, `","`)),
+			},
+		})
+	}
+
+	if noUseTypeStr, ok := pod.Annotations[constants.NoUseTypeAnnotation]; ok {
+		noUseTypes := strings.Split(noUseTypeStr, ",")
+		exactly.Selectors = append(exactly.Selectors, resourceapi.DeviceSelector{
+			CEL: &resourceapi.CELDeviceSelector{
+				Expression: fmt.Sprintf(`device.attributes["%s"].productName not in ["%s"]`, constants.NvidiaDraDriver, strings.Join(noUseTypes, `","`)),
 			},
 		})
 	}
