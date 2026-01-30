@@ -38,6 +38,7 @@ import (
 
 	"github.com/Project-HAMi/HAMi-DRA/cmd/webhook/app/options"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/config"
+	"github.com/Project-HAMi/HAMi-DRA/pkg/featuregates"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/version"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/webhook/dra"
 )
@@ -55,6 +56,8 @@ func NewWebhookCommand(ctx context.Context) *cobra.Command {
 	opts := options.NewOptions()
 	genericFlagSet.AddGoFlagSet(flag.CommandLine)
 	opts.AddFlags(genericFlagSet)
+	fgFlagSet := fss.FlagSet("Feature Gates")
+	featuregates.AddFlags(fgFlagSet)
 
 	cmd := &cobra.Command{
 		Use:   "webhook",
@@ -93,6 +96,7 @@ Kubernetes resources.`,
 
 	cmd.Flags().AddFlagSet(genericFlagSet)
 	cmd.Flags().AddFlagSet(logsFlagSet)
+	cmd.Flags().AddFlagSet(fgFlagSet)
 
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		return nil
