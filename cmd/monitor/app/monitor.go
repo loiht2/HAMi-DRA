@@ -35,6 +35,8 @@ import (
 	"github.com/Project-HAMi/HAMi-DRA/cmd/monitor/app/options"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/cache"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/metrics"
+	"github.com/Project-HAMi/HAMi-DRA/pkg/monitor"
+	"github.com/Project-HAMi/HAMi-DRA/pkg/utils"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/version"
 )
 
@@ -124,6 +126,29 @@ func Run(ctx context.Context, opts *options.Options) error {
 
 	// Create metrics collector and register to registry
 	collector := metrics.NewCollector(cacheInstance)
+
+	// If node-name is set, enable real-time vGPU container metrics
+	var containerLister *monitor.ContainerLister
+	if opts.NodeName != "" {
+		klog.Infof("Node-level mode enabled: node=%s, hookPath=%s", opts.NodeName, opts.HookPath)
+		var err error
+		containerLister, err = monitor.NewContainerLister(opts.HookPath, opts.NodeName)
+		if err != nil {
+			klog.Warningf("Failed to create ContainerLister (real-time vGPU metrics will be unavailable): %v", err)
+		} else {
+			client, err := utils.NewClient()
+			if err != nil {
+				klog.Warningf("Failed to create kubernetes client for VGPUCollector: %v", err)
+			} else {
+				vgpuCollector := metrics.NewVGPUCollector(containerLister, client.Interface, opts.NodeName)
+				collector.SetVGPUCollector(vgpuCollector)
+				klog.Info("Real-time vGPU metrics collector enabled")
+			}
+		}
+	} else {
+		klog.Info("Centralized mode: real-time vGPU metrics disabled (set --node-name to enable)")
+	}
+
 	klog.Info("Registering metrics collector to registry")
 	customRegistry.MustRegister(collector)
 
@@ -174,7 +199,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 	}()
 
 	// Create monitor
-	monitor := NewMonitor(collector, opts.CollectInterval)
+	monitor := NewMonitor(collector, opts.CollectInterval, containerLister)
 
 	// Start monitor in a goroutine
 	go func() {
@@ -202,14 +227,16 @@ func Run(ctx context.Context, opts *options.Options) error {
 }
 
 type Monitor struct {
-	collector *metrics.Collector
-	interval  time.Duration
+	collector       *metrics.Collector
+	interval        time.Duration
+	containerLister *monitor.ContainerLister
 }
 
-func NewMonitor(collector *metrics.Collector, interval time.Duration) *Monitor {
+func NewMonitor(collector *metrics.Collector, interval time.Duration, containerLister *monitor.ContainerLister) *Monitor {
 	return &Monitor{
-		collector: collector,
-		interval:  interval,
+		collector:       collector,
+		interval:        interval,
+		containerLister: containerLister,
 	}
 }
 
@@ -217,18 +244,23 @@ func (m *Monitor) Run(ctx context.Context) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
-	// Note: Prometheus will automatically call Collect() when scraping metrics
-	// We don't need to manually trigger collection here, but we can log that we're ready
 	klog.Info("Monitor is running, metrics will be collected on demand by Prometheus")
 
 	for {
 		select {
 		case <-ticker.C:
-			// Prometheus handles collection automatically, but we can use this ticker for other purposes
-			// For now, just log that we're alive
+			// Update the container lister to pick up new/removed cache files
+			if m.containerLister != nil {
+				if err := m.containerLister.Update(); err != nil {
+					klog.Errorf("Failed to update container lister: %v", err)
+				}
+			}
 			klog.V(5).Info("Monitor tick")
 		case <-ctx.Done():
 			klog.Info("Monitor stopped")
+			if m.containerLister != nil {
+				m.containerLister.Stop()
+			}
 			return
 		}
 	}

@@ -116,6 +116,15 @@ monitor:
   kubeAPIQPS: 40.0
   kubeAPIBurst: 60
   collectInterval: "30s"
+  ## Node-level mode configuration
+  ## When enabled, the monitor runs as a DaemonSet on each GPU node and
+  ## reads HAMi-core shared-memory cache files for real-time per-container
+  ## GPU memory/utilization metrics (vGPU_device_memory_usage_in_bytes, etc.)
+  nodeLevel:
+    enabled: true
+    ## Host-side path where HAMi-core files are installed.
+    ## Cache files exist at {hookPath}/containers/{podUID}_{containerName}/
+    hookPath: "/usr/local/vgpu"
   ## Monitor service configuration
   service:
     ## Service type: ClusterIP, NodePort, or LoadBalancer

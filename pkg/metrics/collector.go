@@ -25,13 +25,20 @@ import (
 )
 
 type Collector struct {
-	cache *cache.Cache
+	cache         *cache.Cache
+	vgpuCollector *VGPUCollector
 }
 
 func NewCollector(cache *cache.Cache) *Collector {
 	return &Collector{
 		cache: cache,
 	}
+}
+
+// SetVGPUCollector sets the optional real-time vGPU metrics collector.
+// When set, the Collector will also emit per-container GPU memory/utilization metrics.
+func (c *Collector) SetVGPUCollector(vc *VGPUCollector) {
+	c.vgpuCollector = vc
 }
 
 // Describe implements prometheus.Collector
@@ -42,6 +49,9 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- nodevGPUCoreAllocatedDesc
 	ch <- podvGPUCoreAllocatedDesc
 	ch <- podvGPUMemoryAllocatedDesc
+	if c.vgpuCollector != nil {
+		DescribeVGPU(ch)
+	}
 }
 
 // Collect implements prometheus.Collector
@@ -49,6 +59,9 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	klog.V(5).Info("Collecting metrics")
 	c.collectNodeMetrics(ch)
 	c.collectPodMetrics(ch)
+	if c.vgpuCollector != nil {
+		c.vgpuCollector.CollectVGPU(ch)
+	}
 }
 
 func (c *Collector) collectNodeMetrics(ch chan<- prometheus.Metric) {
