@@ -172,6 +172,82 @@ vGPU device cores allocated for a container.
 
 **Labels**: Same as `vGPUDeviceMemoryAllocated`
 
+### Container-Level Real-Time Metrics (HAMi-core shared memory)
+
+These metrics are read directly from HAMi-core shared memory cache files on each
+node. They are available only when the monitor runs in **node-level mode**
+(`--node-name` and `--hook-path` are set) and the host vGPU directory is mounted
+into the monitor pod.
+
+#### Base labels (all container-level metrics)
+
+| Label | Description |
+|---|---|
+| `podnamespace` | Pod namespace |
+| `podname` | Pod name |
+| `ctrname` | Container name |
+| `vdeviceid` | Virtual device index inside the container (0, 1, …) |
+| `deviceuuid` | Physical GPU UUID (first 40 chars) |
+
+#### Extended labels (only on `vGPU_device_memory_usage_real_in_MiB` and `vGPU_device_memory_limit_in_MiB`)
+
+| Label | Description |
+|---|---|
+| `pod_uid` | Kubernetes Pod UID |
+| `image` | Container image with tag (e.g. `pytorch/pytorch:2.1.0`) |
+| `image_id` | Container image digest (e.g. `docker.io/pytorch/pytorch@sha256:abc123…`) |
+| `device_type` | GPU product name from DRA ResourceSlice (e.g. `Tesla V100-PCIE-32GB`) |
+
+#### Metrics
+
+| Metric | Description | Labels |
+|---|---|---|
+| `Device_memory_desc_of_container` | Raw device memory total (bytes) reported by HAMi-core | base |
+| `Device_utilization_desc_of_container` | SM utilization (%) | base |
+| `Device_last_kernel_of_container` | Seconds since the last GPU kernel executed | base |
+| `vGPU_device_memory_usage_in_MiB` | cudaMalloc-tracked memory usage (MiB, rounded) | base |
+| `vGPU_device_memory_usage_real_in_MiB` | Real GPU memory usage from NVML matching nvidia-smi (MiB, rounded) | base + extended |
+| `vGPU_device_memory_limit_in_MiB` | Memory limit configured for this vGPU (MiB, rounded) | base + extended |
+| `vGPU_device_memory_context_size_MiB` | CUDA context memory (MiB, rounded) | base |
+| `vGPU_device_memory_module_size_MiB` | CUDA module memory (MiB, rounded) | base |
+| `vGPU_device_memory_buffer_size_MiB` | CUDA buffer memory (MiB, rounded) | base |
+
+#### Example
+
+```
+vGPU_device_memory_usage_real_in_MiB{
+  podnamespace="default",
+  podname="training-job-0",
+  ctrname="trainer",
+  vdeviceid="0",
+  deviceuuid="GPU-7ee58073-64f3-b5c7-860d-4f8cdb7c3f4e",
+  pod_uid="71a6f8ca-dc6f-497e-b791-d82fe673fb91",
+  image="docker.io/deepspeed/deepspeed:latest",
+  image_id="docker.io/deepspeed/deepspeed@sha256:589ec255…",
+  device_type="Tesla V100-PCIE-32GB"
+} 2586
+
+vGPU_device_memory_limit_in_MiB{
+  podnamespace="default",
+  podname="training-job-0",
+  ctrname="trainer",
+  vdeviceid="0",
+  deviceuuid="GPU-7ee58073-64f3-b5c7-860d-4f8cdb7c3f4e",
+  pod_uid="71a6f8ca-dc6f-497e-b791-d82fe673fb91",
+  image="docker.io/deepspeed/deepspeed:latest",
+  image_id="docker.io/deepspeed/deepspeed@sha256:589ec255…",
+  device_type="Tesla V100-PCIE-32GB"
+} 4096
+
+vGPU_device_memory_usage_in_MiB{
+  podnamespace="default",
+  podname="training-job-0",
+  ctrname="trainer",
+  vdeviceid="0",
+  deviceuuid="GPU-7ee58073-64f3-b5c7-860d-4f8cdb7c3f4e"
+} 2400
+```
+
 ## Endpoints
 
 ### Metrics Endpoint

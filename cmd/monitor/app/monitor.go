@@ -141,7 +141,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 		}
 		defer containerLister.Stop()
 
-		vgpuCollector := metrics.NewVGPUCollector(containerLister, cacheInstance.GetClientset(), opts.NodeName)
+		vgpuCollector := metrics.NewVGPUCollector(containerLister, cacheInstance.GetClientset(), opts.NodeName, cacheInstance.NodeDevices)
 		klog.Info("Registering vGPU collector to registry")
 		customRegistry.MustRegister(vgpuCollector)
 

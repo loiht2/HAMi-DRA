@@ -99,13 +99,13 @@ var (
 	ctrvGPUMemoryUsageRealMiBDesc = prometheus.NewDesc(
 		"vGPU_device_memory_usage_real_in_MiB",
 		"Real GPU memory usage in MiB from NVML (matches nvidia-smi, rounded)",
-		[]string{"podnamespace", "podname", "ctrname", "vdeviceid", "deviceuuid"}, nil,
+		[]string{"podnamespace", "podname", "ctrname", "vdeviceid", "deviceuuid", "pod_uid", "image", "image_id", "device_type"}, nil,
 	)
 
 	ctrvGPUMemoryLimitMiBDesc = prometheus.NewDesc(
 		"vGPU_device_memory_limit_in_MiB",
 		"vGPU device memory limit in MiB (rounded)",
-		[]string{"podnamespace", "podname", "ctrname", "vdeviceid", "deviceuuid"}, nil,
+		[]string{"podnamespace", "podname", "ctrname", "vdeviceid", "deviceuuid", "pod_uid", "image", "image_id", "device_type"}, nil,
 	)
 
 	ctrDeviceMemoryContextMiBDesc = prometheus.NewDesc(

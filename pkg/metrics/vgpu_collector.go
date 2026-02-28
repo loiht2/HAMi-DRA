@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Project-HAMi/HAMi-DRA/pkg/cache"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/monitor"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,11 +37,12 @@ type VGPUCollector struct {
 	containerLister *monitor.ContainerLister
 	podLister       listerscorev1.PodLister
 	nodeName        string
+	nodeDevices     *cache.NodeDevices
 }
 
 // NewVGPUCollector creates a VGPUCollector. It sets up a pod informer to
 // resolve podUID -> (namespace, name) for metric labels.
-func NewVGPUCollector(containerLister *monitor.ContainerLister, clientset kubernetes.Interface, nodeName string) *VGPUCollector {
+func NewVGPUCollector(containerLister *monitor.ContainerLister, clientset kubernetes.Interface, nodeName string, nodeDevices *cache.NodeDevices) *VGPUCollector {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(clientset, time.Hour*1)
 	podLister := informerFactory.Core().V1().Pods().Lister()
 	stopCh := make(chan struct{})
@@ -51,6 +53,7 @@ func NewVGPUCollector(containerLister *monitor.ContainerLister, clientset kubern
 		containerLister: containerLister,
 		podLister:       podLister,
 		nodeName:        nodeName,
+		nodeDevices:     nodeDevices,
 	}
 }
 
@@ -93,9 +96,38 @@ func (vc *VGPUCollector) Collect(ch chan<- prometheus.Metric) {
 		klog.Errorf("VGPUCollector: failed to list pods: %v", err)
 		return
 	}
-	podInfoMap := make(map[string][2]string) // podUID -> [namespace, name]
+	// podMeta holds resolved pod metadata for metric labels.
+	type podMeta struct {
+		namespace   string
+		name        string
+		ctrImages   map[string]string // containerName -> image (with tag)
+		ctrImageIDs map[string]string // containerName -> imageID (digest)
+	}
+	podInfoMap := make(map[string]*podMeta) // podUID -> metadata
 	for _, pod := range pods {
-		podInfoMap[string(pod.UID)] = [2]string{pod.Namespace, pod.Name}
+		imgMap := make(map[string]string)
+		imgIDMap := make(map[string]string)
+		for _, cs := range pod.Status.ContainerStatuses {
+			imgMap[cs.Name] = cs.Image
+			imgIDMap[cs.Name] = cs.ImageID
+		}
+		podInfoMap[string(pod.UID)] = &podMeta{
+			namespace:  pod.Namespace,
+			name:       pod.Name,
+			ctrImages:  imgMap,
+			ctrImageIDs: imgIDMap,
+		}
+	}
+
+	// Build UUID -> productName map from DRA ResourceSlice cache.
+	uuidToProduct := make(map[string]string)
+	if vc.nodeDevices != nil {
+		devices := vc.nodeDevices.GetDevices(vc.nodeName)
+		for _, d := range devices {
+			if d.UUID != "" {
+				uuidToProduct[d.UUID] = d.ProductName
+			}
+		}
 	}
 
 	nowSec := time.Now().Unix()
@@ -110,9 +142,11 @@ func (vc *VGPUCollector) Collect(ch chan<- prometheus.Metric) {
 			klog.V(5).Infof("VGPUCollector: pod UID %s not found in informer cache, skipping", c.PodUID)
 			continue
 		}
-		podNamespace := podInfo[0]
-		podName := podInfo[1]
+		podNamespace := podInfo.namespace
+		podName := podInfo.name
 		ctrName := c.ContainerName
+		ctrImage := podInfo.ctrImages[ctrName]
+		ctrImageID := podInfo.ctrImageIDs[ctrName]
 
 		for i := range c.Info.DeviceNum() {
 			uuid := c.Info.DeviceUUID(i)
@@ -122,6 +156,14 @@ func (vc *VGPUCollector) Collect(ch chan<- prometheus.Metric) {
 			uuid = uuid[0:40]
 
 			lbls := []string{podNamespace, podName, ctrName, fmt.Sprint(i), uuid}
+
+			// Extended labels for usage_real and limit metrics:
+			// pod_uid, image (with tag), device_type (GPU product name)
+			deviceType := uuidToProduct[uuid]
+			if deviceType == "" {
+				deviceType = "unknown"
+			}
+			extLbls := append(lbls, c.PodUID, ctrImage, ctrImageID, deviceType)
 
 			memoryTotal := c.Info.DeviceMemoryTotal(i)
 			memoryLimit := c.Info.DeviceMemoryLimit(i)
@@ -146,8 +188,8 @@ func (vc *VGPUCollector) Collect(ch chan<- prometheus.Metric) {
 
 			// MiB metrics (rounded)
 			sendMetricSafe(ch, ctrvGPUMemoryUsageMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryTotal), lbls...)
-			sendMetricSafe(ch, ctrvGPUMemoryUsageRealMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryMonitor), lbls...)
-			sendMetricSafe(ch, ctrvGPUMemoryLimitMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryLimit), lbls...)
+			sendMetricSafe(ch, ctrvGPUMemoryUsageRealMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryMonitor), extLbls...)
+			sendMetricSafe(ch, ctrvGPUMemoryLimitMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryLimit), extLbls...)
 			sendMetricSafe(ch, ctrDeviceMemoryContextMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryContextSize), lbls...)
 			sendMetricSafe(ch, ctrDeviceMemoryModuleMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryModuleSize), lbls...)
 			sendMetricSafe(ch, ctrDeviceMemoryBufferMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryBufferSize), lbls...)
