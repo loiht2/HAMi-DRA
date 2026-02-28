@@ -128,6 +128,14 @@ func (s Spec) DeviceMemoryTotal(idx int) uint64 {
 	return v
 }
 
+func (s Spec) DeviceMemoryMonitor(idx int) uint64 {
+	v := uint64(0)
+	for _, p := range s.sr.procs[:int(s.sr.procnum)] {
+		v += p.monitorused[idx]
+	}
+	return v
+}
+
 func (s Spec) DeviceSmUtil(idx int) uint64 {
 	v := uint64(0)
 	for _, p := range s.sr.procs[:int(s.sr.procnum)] {

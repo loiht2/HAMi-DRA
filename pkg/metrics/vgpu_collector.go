@@ -31,6 +31,7 @@ import (
 
 // VGPUCollector collects real-time per-container GPU metrics by reading
 // HAMi-core shared memory cache files via a ContainerLister.
+// It implements prometheus.Collector.
 type VGPUCollector struct {
 	containerLister *monitor.ContainerLister
 	podLister       listerscorev1.PodLister
@@ -53,20 +54,29 @@ func NewVGPUCollector(containerLister *monitor.ContainerLister, clientset kubern
 	}
 }
 
-// DescribeVGPU sends all real-time vGPU metric descriptors to the channel.
-func DescribeVGPU(ch chan<- *prometheus.Desc) {
-	ch <- ctrvGPUMemoryUsageDesc
-	ch <- ctrvGPUMemoryLimitDesc
+// Describe implements prometheus.Collector — sends all vGPU metric descriptors.
+func (vc *VGPUCollector) Describe(ch chan<- *prometheus.Desc) {
+	// Bytes metrics are commented out — kept for future use.
+	// ch <- ctrvGPUMemoryUsageDesc
+	// ch <- ctrvGPUMemoryUsageRealDesc
+	// ch <- ctrvGPUMemoryLimitDesc
+	// ch <- ctrDeviceMemoryContextDesc
+	// ch <- ctrDeviceMemoryModuleDesc
+	// ch <- ctrDeviceMemoryBufferDesc
+
 	ch <- ctrDeviceMemoryDesc
 	ch <- ctrDeviceUtilizationDesc
 	ch <- ctrDeviceLastKernelDesc
-	ch <- ctrDeviceMemoryContextDesc
-	ch <- ctrDeviceMemoryModuleDesc
-	ch <- ctrDeviceMemoryBufferDesc
+	ch <- ctrvGPUMemoryUsageMiBDesc
+	ch <- ctrvGPUMemoryUsageRealMiBDesc
+	ch <- ctrvGPUMemoryLimitMiBDesc
+	ch <- ctrDeviceMemoryContextMiBDesc
+	ch <- ctrDeviceMemoryModuleMiBDesc
+	ch <- ctrDeviceMemoryBufferMiBDesc
 }
 
-// CollectVGPU gathers real-time container GPU metrics from cache files.
-func (vc *VGPUCollector) CollectVGPU(ch chan<- prometheus.Metric) {
+// Collect implements prometheus.Collector — gathers real-time container GPU metrics.
+func (vc *VGPUCollector) Collect(ch chan<- prometheus.Metric) {
 	if vc == nil || vc.containerLister == nil {
 		return
 	}
@@ -115,19 +125,32 @@ func (vc *VGPUCollector) CollectVGPU(ch chan<- prometheus.Metric) {
 
 			memoryTotal := c.Info.DeviceMemoryTotal(i)
 			memoryLimit := c.Info.DeviceMemoryLimit(i)
+			memoryMonitor := c.Info.DeviceMemoryMonitor(i)
 			memoryContextSize := c.Info.DeviceMemoryContextSize(i)
 			memoryModuleSize := c.Info.DeviceMemoryModuleSize(i)
 			memoryBufferSize := c.Info.DeviceMemoryBufferSize(i)
 			smUtil := c.Info.DeviceSmUtil(i)
 			lastKernelTime := c.Info.LastKernelTime()
 
-			sendMetricSafe(ch, ctrvGPUMemoryUsageDesc, prometheus.GaugeValue, float64(memoryTotal), lbls...)
-			sendMetricSafe(ch, ctrvGPUMemoryLimitDesc, prometheus.GaugeValue, float64(memoryLimit), lbls...)
+			// Bytes metrics are commented out — kept for future use.
+			// sendMetricSafe(ch, ctrvGPUMemoryUsageDesc, prometheus.GaugeValue, float64(memoryTotal), lbls...)
+			// sendMetricSafe(ch, ctrvGPUMemoryUsageRealDesc, prometheus.GaugeValue, float64(memoryMonitor), lbls...)
+			// sendMetricSafe(ch, ctrvGPUMemoryLimitDesc, prometheus.GaugeValue, float64(memoryLimit), lbls...)
+			// sendMetricSafe(ch, ctrDeviceMemoryContextDesc, prometheus.GaugeValue, float64(memoryContextSize), lbls...)
+			// sendMetricSafe(ch, ctrDeviceMemoryModuleDesc, prometheus.GaugeValue, float64(memoryModuleSize), lbls...)
+			// sendMetricSafe(ch, ctrDeviceMemoryBufferDesc, prometheus.GaugeValue, float64(memoryBufferSize), lbls...)
+
+			// Active metrics
 			sendMetricSafe(ch, ctrDeviceMemoryDesc, prometheus.GaugeValue, float64(memoryTotal), lbls...)
 			sendMetricSafe(ch, ctrDeviceUtilizationDesc, prometheus.GaugeValue, float64(smUtil), lbls...)
-			sendMetricSafe(ch, ctrDeviceMemoryContextDesc, prometheus.GaugeValue, float64(memoryContextSize), lbls...)
-			sendMetricSafe(ch, ctrDeviceMemoryModuleDesc, prometheus.GaugeValue, float64(memoryModuleSize), lbls...)
-			sendMetricSafe(ch, ctrDeviceMemoryBufferDesc, prometheus.GaugeValue, float64(memoryBufferSize), lbls...)
+
+			// MiB metrics (rounded)
+			sendMetricSafe(ch, ctrvGPUMemoryUsageMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryTotal), lbls...)
+			sendMetricSafe(ch, ctrvGPUMemoryUsageRealMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryMonitor), lbls...)
+			sendMetricSafe(ch, ctrvGPUMemoryLimitMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryLimit), lbls...)
+			sendMetricSafe(ch, ctrDeviceMemoryContextMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryContextSize), lbls...)
+			sendMetricSafe(ch, ctrDeviceMemoryModuleMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryModuleSize), lbls...)
+			sendMetricSafe(ch, ctrDeviceMemoryBufferMiBDesc, prometheus.GaugeValue, bytesToMiB(memoryBufferSize), lbls...)
 
 			if lastKernelTime > 0 {
 				lastSec := max(nowSec-lastKernelTime, 0)

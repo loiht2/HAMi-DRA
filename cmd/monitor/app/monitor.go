@@ -36,7 +36,6 @@ import (
 	"github.com/Project-HAMi/HAMi-DRA/pkg/cache"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/metrics"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/monitor"
-	"github.com/Project-HAMi/HAMi-DRA/pkg/utils"
 	"github.com/Project-HAMi/HAMi-DRA/pkg/version"
 )
 
@@ -126,31 +125,44 @@ func Run(ctx context.Context, opts *options.Options) error {
 
 	// Create metrics collector and register to registry
 	collector := metrics.NewCollector(cacheInstance)
+	klog.Info("Registering metrics collector to registry")
+	customRegistry.MustRegister(collector)
 
-	// If node-name is set, enable real-time vGPU container metrics
+	// If node-level flags are set, create the ContainerLister + VGPUCollector
+	// to read HAMi-core shared memory cache files for real-time GPU metrics.
 	var containerLister *monitor.ContainerLister
-	if opts.NodeName != "" {
-		klog.Infof("Node-level mode enabled: node=%s, hookPath=%s", opts.NodeName, opts.HookPath)
+	if opts.NodeName != "" && opts.HookPath != "" {
+		klog.Infof("Node-level mode: nodeName=%s hookPath=%s", opts.NodeName, opts.HookPath)
 		var err error
 		containerLister, err = monitor.NewContainerLister(opts.HookPath, opts.NodeName)
 		if err != nil {
-			klog.Warningf("Failed to create ContainerLister (real-time vGPU metrics will be unavailable): %v", err)
-		} else {
-			client, err := utils.NewClient()
-			if err != nil {
-				klog.Warningf("Failed to create kubernetes client for VGPUCollector: %v", err)
-			} else {
-				vgpuCollector := metrics.NewVGPUCollector(containerLister, client.Interface, opts.NodeName)
-				collector.SetVGPUCollector(vgpuCollector)
-				klog.Info("Real-time vGPU metrics collector enabled")
-			}
+			klog.Errorf("Failed to create ContainerLister: %v", err)
+			return err
 		}
-	} else {
-		klog.Info("Centralized mode: real-time vGPU metrics disabled (set --node-name to enable)")
-	}
+		defer containerLister.Stop()
 
-	klog.Info("Registering metrics collector to registry")
-	customRegistry.MustRegister(collector)
+		vgpuCollector := metrics.NewVGPUCollector(containerLister, cacheInstance.GetClientset(), opts.NodeName)
+		klog.Info("Registering vGPU collector to registry")
+		customRegistry.MustRegister(vgpuCollector)
+
+		// Start periodic cache scan loop
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := containerLister.Update(); err != nil {
+						klog.Errorf("ContainerLister.Update failed: %v", err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	} else {
+		klog.Info("Node-level mode disabled (--node-name or --hook-path not set)")
+	}
 
 	// Create HTTP server for metrics with registry
 	metricsMux := http.NewServeMux()
@@ -199,7 +211,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 	}()
 
 	// Create monitor
-	monitor := NewMonitor(collector, opts.CollectInterval, containerLister)
+	monitor := NewMonitor(collector, opts.CollectInterval)
 
 	// Start monitor in a goroutine
 	go func() {
@@ -227,16 +239,14 @@ func Run(ctx context.Context, opts *options.Options) error {
 }
 
 type Monitor struct {
-	collector       *metrics.Collector
-	interval        time.Duration
-	containerLister *monitor.ContainerLister
+	collector *metrics.Collector
+	interval  time.Duration
 }
 
-func NewMonitor(collector *metrics.Collector, interval time.Duration, containerLister *monitor.ContainerLister) *Monitor {
+func NewMonitor(collector *metrics.Collector, interval time.Duration) *Monitor {
 	return &Monitor{
-		collector:       collector,
-		interval:        interval,
-		containerLister: containerLister,
+		collector: collector,
+		interval:  interval,
 	}
 }
 
@@ -244,23 +254,18 @@ func (m *Monitor) Run(ctx context.Context) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
+	// Note: Prometheus will automatically call Collect() when scraping metrics
+	// We don't need to manually trigger collection here, but we can log that we're ready
 	klog.Info("Monitor is running, metrics will be collected on demand by Prometheus")
 
 	for {
 		select {
 		case <-ticker.C:
-			// Update the container lister to pick up new/removed cache files
-			if m.containerLister != nil {
-				if err := m.containerLister.Update(); err != nil {
-					klog.Errorf("Failed to update container lister: %v", err)
-				}
-			}
+			// Prometheus handles collection automatically, but we can use this ticker for other purposes
+			// For now, just log that we're alive
 			klog.V(5).Info("Monitor tick")
 		case <-ctx.Done():
 			klog.Info("Monitor stopped")
-			if m.containerLister != nil {
-				m.containerLister.Stop()
-			}
 			return
 		}
 	}

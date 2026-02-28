@@ -50,7 +50,7 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- podvGPUCoreAllocatedDesc
 	ch <- podvGPUMemoryAllocatedDesc
 	if c.vgpuCollector != nil {
-		DescribeVGPU(ch)
+		c.vgpuCollector.Describe(ch)
 	}
 }
 
@@ -60,7 +60,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	c.collectNodeMetrics(ch)
 	c.collectPodMetrics(ch)
 	if c.vgpuCollector != nil {
-		c.vgpuCollector.CollectVGPU(ch)
+		c.vgpuCollector.Collect(ch)
 	}
 }
 

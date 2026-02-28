@@ -18,7 +18,6 @@ package options
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -47,14 +46,11 @@ type Options struct {
 	// CollectInterval is the interval at which metrics are collected.
 	// Defaults to 30s.
 	CollectInterval time.Duration
-	// NodeName is the name of the node this monitor runs on.
-	// When set (together with HookPath), the monitor also collects real-time
-	// per-container GPU memory metrics from HAMi-core shared-memory cache files.
-	// Leave empty for centralized (Deployment) mode.
+	// NodeName is the name of the node this monitor is running on.
+	// Required for node-level vGPU metrics.
 	NodeName string
-	// HookPath is the host-side path where HAMi-core files are installed
-	// (e.g. /usr/local/vgpu). The monitor reads cache files from
-	// {HookPath}/containers/{podUID}_{containerName}/.
+	// HookPath is the host path where HAMi-core is installed.
+	// Cache files are at {HookPath}/containers/{podUID}_{ctrName}/
 	HookPath string
 }
 
@@ -70,8 +66,8 @@ func (o *Options) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&o.MetricsBindAddress, "metrics-bind-address", ":8080", "The TCP address that the controller should bind to for serving prometheus metrics(e.g. 127.0.0.1:8080, :8080). It can be set to \"0\" to disable the metrics serving.")
 	flags.StringVar(&o.HealthProbeBindAddress, "health-probe-bind-address", ":8000", "The TCP address that the controller should bind to for serving health probes(e.g. 127.0.0.1:8000, :8000)")
 	flags.DurationVar(&o.CollectInterval, "collect-interval", defaultCollectInterval, "The interval at which metrics are collected.")
-	flags.StringVar(&o.NodeName, "node-name", "", "The name of the node this monitor is running on. When set with --hook-path, enables real-time vGPU container metrics. Can also be set via NODE_NAME env var.")
-	flags.StringVar(&o.HookPath, "hook-path", "/usr/local/vgpu", "The host-side path where HAMi-core files are installed. Cache files are read from {hook-path}/containers/.")
+	flags.StringVar(&o.NodeName, "node-name", "", "Node name for node-level vGPU metrics (reads HAMi-core shared memory). Usually set via downward API.")
+	flags.StringVar(&o.HookPath, "hook-path", "", "Host path where HAMi-core is installed. Cache files at {hook-path}/containers/.")
 }
 
 // Validate validates the options and returns aggregated errors.
@@ -88,11 +84,6 @@ func (o *Options) Validate() error {
 
 	if o.CollectInterval <= 0 {
 		errs = append(errs, fmt.Errorf("--collect-interval must be greater than 0"))
-	}
-
-	// Allow NODE_NAME env var as fallback
-	if o.NodeName == "" {
-		o.NodeName = os.Getenv("NODE_NAME")
 	}
 
 	return errors.NewAggregate(errs)

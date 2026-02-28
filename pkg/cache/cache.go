@@ -63,6 +63,11 @@ func NewCacheWithClient(kubeClient kubernetes.Interface) *Cache {
 	}
 }
 
+// GetClientset returns the underlying Kubernetes client.
+func (c *Cache) GetClientset() kubernetes.Interface {
+	return c.kubeClient
+}
+
 func (c *Cache) Start() error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(c.kubeClient, time.Hour*1)
 	c.sliceLister = informerFactory.Resource().V1().ResourceSlices().Lister()
