@@ -10,34 +10,34 @@ global:
   ## @param global.imagePullSecrets Global Docker image pull secrets
   imagePullSecrets: []
 
-#Nvidia GPU Parameters
+# Nvidia GPU Parameters
 resourceName: "nvidia.com/gpu"
 resourceMem: "nvidia.com/gpumem"
 resourceMemPercentage: "nvidia.com/gpumem-percentage"
 resourceCores: "nvidia.com/gpucores"
 resourcePriority: "nvidia.com/priority"
 
-#MLU Parameters
+# MLU Parameters
 mluResourceName: "cambricon.com/vmlu"
 mluResourceMem: "cambricon.com/mlu.smlu.vmemory"
 mluResourceCores: "cambricon.com/mlu.smlu.vcore"
 
-#Hygon DCU Parameters
+# Hygon DCU Parameters
 dcuResourceName: "hygon.com/dcunum"
 dcuResourceMem: "hygon.com/dcumem"
 dcuResourceCores: "hygon.com/dcucores"
 
-#Metax sGPU Parameters
+# Metax sGPU Parameters
 metaxResourceName: "metax-tech.com/sgpu"
 metaxResourceCore: "metax-tech.com/vcore"
 metaxResourceMem: "metax-tech.com/vmemory"
 metaxsGPUTopologyAware: "false"
 
-#Enflame VGCU Parameters
+# Enflame VGCU Parameters
 enflameResourceNameVGCU: "enflame.com/vgcu"
 enflameResourceNameVGCUPercentage: "enflame.com/vgcu-percentage"
 
-#Kunlun XPU Parameters
+# Kunlun XPU Parameters
 kunlunResourceName: "kunlunxin.com/xpu"
 kunlunResourceVCountName: "kunlunxin.com/vxpu"
 kunlunResourceVMemoryName: "kunlunxin.com/vxpu-memory"
@@ -47,7 +47,7 @@ webhook:
   image:
     registry: ghcr.io
     repository: project-hami/hami-dra-webhook
-    tag: "v0.1.0"
+    tag: "latest"
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
     ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -93,7 +93,7 @@ webhook:
       # Additional namespaces to exclude from webhook effects.
       excludedNamespaces:
         - kube-system
-    volcano: 
+    volcano:
       enabled: true
 
 # Monitor deployment configuration
@@ -103,7 +103,7 @@ monitor:
   image:
     registry: ghcr.io
     repository: project-hami/hami-dra-monitor
-    tag: "v0.1.0"
+    tag: "latest"
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
     ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -166,13 +166,13 @@ drivers:
         gpu: "on"
       tolerations: []
       affinity: {}
-      
+
     # If you are using gpu driver on host, you need to set this to false
     containerDriver: true
     image:
       registry: ghcr.io
-      repository: projecthami/k8s-dra-driver
-      tag: "v0.0.1-dev"
+      repository: project-hami/k8s-dra-driver
+      tag: "latest"
       ## Specify a imagePullPolicy
       ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
       ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -191,7 +191,7 @@ drivers:
     image:
       registry: ghcr.io
       repository: project-hami/hami-dra-fake-driver
-      tag: "v0.1.0"
+      tag: "latest"
       pullPolicy: IfNotPresent
       pullSecrets: []
     resources:
