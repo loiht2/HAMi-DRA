@@ -14,9 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package constants contains shared constants used across the project.
 package constants
 
 const (
+	// TODO: Decouple these annotation keys from the nvidia.com prefix so fake driver
+	// can use driver-specific or generic keys without reusing NVIDIA naming.
 	UseUUIDAnnotation   = "nvidia.com/use-gpuuuid"
 	NoUseUUIDAnnotation = "nvidia.com/nouse-gpuuuid"
 	UseTypeAnnotation   = "nvidia.com/use-gputype"

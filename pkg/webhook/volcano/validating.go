@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package dra
+package volcano
 
 import (
 	"context"
@@ -22,13 +22,13 @@ import (
 	"net/http"
 
 	"github.com/Project-HAMi/HAMi-DRA/pkg/constants"
-	corev1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	vcv1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 )
 
 // ValidatingAdmission validates API request when creating/updating/deleting.
@@ -40,28 +40,28 @@ type ValidatingAdmission struct {
 // Check if our ValidatingAdmission implements necessary interface
 var _ admission.Handler = &ValidatingAdmission{}
 
-// Handle deletes the ResourceClaim when a DRA-managed Pod is deleted.
+// Handle deletes the ResourceClaim when a DRA-managed Volcano job is deleted.
 func (v *ValidatingAdmission) Handle(ctx context.Context, req admission.Request) admission.Response {
-	pod := &corev1.Pod{}
+	job := &vcv1alpha1.Job{}
 
-	if err := json.Unmarshal(req.OldObject.Raw, pod); err != nil {
+	if err := json.Unmarshal(req.OldObject.Raw, job); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	if _, ok := pod.Labels[constants.DraLabel]; !ok {
+	if _, ok := job.Labels[constants.DraLabel]; !ok {
 		return admission.Allowed("")
 	}
-	klog.V(5).Infof("Validating Pod(%s/%s) for request: %s", req.Namespace, pod.Name, req.Operation)
+	klog.V(5).Infof("Validating Job(%s/%s) for request: %s", req.Namespace, job.Name, req.Operation)
 
-	resourceClaimNameList := getResourceClaimName(pod)
+	resourceClaimNameList := getResourceClaimName(job)
 	for _, resourceClaimName := range resourceClaimNameList {
-		err := v.Client.Delete(ctx, &resourceapi.ResourceClaim{
+		err := v.Client.Delete(ctx, &resourceapi.ResourceClaimTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceClaimName,
-				Namespace: pod.Namespace,
+				Namespace: job.Namespace,
 			},
 		})
 		if err != nil && !apierrors.IsNotFound(err) {
-			klog.Warningf("Failed to delete ResourceClaim %s/%s: %v", pod.Namespace, resourceClaimName, err)
+			klog.Warningf("Failed to delete ResourceClaim %s/%s: %v", job.Namespace, resourceClaimName, err)
 			continue
 		}
 	}
@@ -69,10 +69,12 @@ func (v *ValidatingAdmission) Handle(ctx context.Context, req admission.Request)
 	return admission.Allowed("")
 }
 
-func getResourceClaimName(pod *corev1.Pod) []string {
+func getResourceClaimName(job *vcv1alpha1.Job) []string {
 	resourceClaimNameList := []string{}
-	for _, resourceClaim := range pod.Spec.ResourceClaims {
-		resourceClaimNameList = append(resourceClaimNameList, resourceClaim.Name)
+	for _, task := range job.Spec.Tasks {
+		for _, resourceClaim := range task.Template.Spec.ResourceClaims {
+			resourceClaimNameList = append(resourceClaimNameList, resourceClaim.Name)
+		}
 	}
 	return resourceClaimNameList
 }

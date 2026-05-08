@@ -101,6 +101,8 @@ type NvidiaConfig struct {
 	ResourceCoreName             string `yaml:"resourceCoreName"`
 	ResourceMemoryPercentageName string `yaml:"resourceMemoryPercentageName"`
 	ResourcePriority             string `yaml:"resourcePriorityName"`
+	DeviceClassName              string `yaml:"deviceClassName"`
+	DraDriverName                string `yaml:"draDriverName"`
 	OverwriteEnv                 bool   `yaml:"overwriteEnv"`
 	DefaultMemory                int32  `yaml:"defaultMemory"`
 	DefaultCores                 int32  `yaml:"defaultCores"`
@@ -114,7 +116,21 @@ type NvidiaConfig struct {
 	RuntimeClassName string `yaml:"runtimeClassName"`
 }
 
-// These configs can be sepecified for each node by using Nodeconfig.
+func (c *NvidiaConfig) EffectiveDeviceClassName() string {
+	if c != nil && c.DeviceClassName != "" {
+		return c.DeviceClassName
+	}
+	return "hami-core-gpu.project-hami.io"
+}
+
+func (c *NvidiaConfig) EffectiveDraDriverName() string {
+	if c != nil && c.DraDriverName != "" {
+		return c.DraDriverName
+	}
+	return "hami-core-gpu.project-hami.io"
+}
+
+// NodeDefaultConfig defines settings that can be specified per node via Nodeconfig.
 type NodeDefaultConfig struct {
 	//nolint:tagalign
 	DeviceSplitCount *uint `yaml:"deviceSplitCount" json:"devicesplitcount"`

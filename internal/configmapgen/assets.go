@@ -14,3 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+package configmapgen
+
+import "embed"
+
+// Embed the whole web directory to avoid fragile per-file patterns.
+//
+//go:embed web
+var webAssets embed.FS
